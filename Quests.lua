@@ -605,10 +605,10 @@ local function Tooltip(row, tt)
         tt:AddLine(" ")
         tt:AddLine(L["SHARED_PROGRESS"])
         for i = 1, #row.shared do
-            local done, need = row.shared[i][1], row.shared[i][2]
+            local got, goal = row.shared[i][1], row.shared[i][2]
             local text = data[i] and data[i].Text or ""
-            local full = need > 0 and done >= need
-            tt:AddLine(sformat("%d/%d %s", done, need, text), full and 0.5 or 1, full and 0.5 or 1, full and 0.5 or 1, true)
+            local full = goal > 0 and got >= goal
+            tt:AddLine(sformat("%d/%d %s", got, goal, text), full and 0.5 or 1, full and 0.5 or 1, full and 0.5 or 1, true)
         end
     end
     local live = C_QuestLog.IsOnQuest(id) and C_QuestLog.GetQuestObjectives(id)

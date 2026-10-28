@@ -1,4 +1,4 @@
-## Interface: 16001
+## Interface: 50504, 11509, 16001, 20506
 ## Title: EasyFind [Questie]
 ## Notes: Questie's quests in EasyFind's search bar: find one by name, get directions. Requires Questie.
 ## Author: justawower

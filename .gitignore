@@ -7,3 +7,6 @@ dev/
 *~
 Thumbs.db
 .DS_Store
+ziptest.sh
+cf_upload.py
+process_changelog.py
