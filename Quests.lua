@@ -16,6 +16,54 @@ local C_QuestLog, C_Map = C_QuestLog, C_Map
 local IsShiftKeyDown, IsAltKeyDown, IsControlKeyDown = IsShiftKeyDown, IsAltKeyDown, IsControlKeyDown
 local sformat, mhuge, tconcat = string.format, math.huge, table.concat
 
+-- The quest log by client: retail and Forever answer through C_QuestLog;
+-- Era, Anniversary and Mists keep the log-index calls (C_QuestLog.IsComplete
+-- is nil there and every row died on it, 2026-10-28).
+local function LogIndex(id)
+    if C_QuestLog.GetLogIndexForQuestID then return C_QuestLog.GetLogIndexForQuestID(id) end
+    local index = GetQuestLogIndexByID and GetQuestLogIndexByID(id)
+    return index and index > 0 and index or nil
+end
+
+local function IsDone(id)
+    if C_QuestLog.IsComplete then return C_QuestLog.IsComplete(id) end
+    local index = LogIndex(id)
+    if not index then return false end
+    local isComplete = select(6, GetQuestLogTitle(index))
+    return isComplete ~= nil and isComplete > 0
+end
+
+local function IsWatched(id)
+    if C_QuestLog.GetQuestWatchType then return C_QuestLog.GetQuestWatchType(id) ~= nil end
+    local index = LogIndex(id)
+    return index ~= nil and IsQuestWatched(index) and true or false
+end
+
+local function SetWatched(id, on)
+    if C_QuestLog.AddQuestWatch then
+        if on then C_QuestLog.AddQuestWatch(id, Enum.QuestWatchType and Enum.QuestWatchType.Manual)
+        else C_QuestLog.RemoveQuestWatch(id) end
+        return
+    end
+    local index = LogIndex(id)
+    if not index then return end
+    if on then AddQuestWatch(index) else RemoveQuestWatch(index) end
+end
+
+-- The quest chosen in the log, true when it could be.
+local function SelectInLog(id)
+    if C_QuestLog.SetSelectedQuest then
+        C_QuestLog.SetSelectedQuest(id)
+        return true
+    end
+    local index = LogIndex(id)
+    if index and SelectQuestLogEntry then
+        SelectQuestLogEntry(index)
+        return true
+    end
+    return false
+end
+
 -- Questie's modules, bound when it says it is ready; nil until then.
 local Q = {}
 local ready = false
@@ -245,7 +293,7 @@ end
 -- Where a click goes, by the quest's state; nil when nowhere is known.
 local function QuestDest(id, questName)
     if C_QuestLog.IsOnQuest(id) then
-        if C_QuestLog.IsComplete(id) then return FinisherDest(id, questName) end
+        if IsDone(id) then return FinisherDest(id, questName) end
         return ObjectiveDest(id, questName)
     end
     return StarterDest(id, questName)
@@ -257,9 +305,9 @@ local function Hint(row)
     if not (ready and id) then return nil end
     local onQuest = C_QuestLog.IsOnQuest(id)
     local click = L["HINT_GIVER"]
-    if onQuest then click = C_QuestLog.IsComplete(id) and L["HINT_TURN_IN"] or L["HINT_OBJECTIVE"] end
+    if onQuest then click = IsDone(id) and L["HINT_TURN_IN"] or L["HINT_OBJECTIVE"] end
     local ctrl
-    if onQuest then ctrl = C_QuestLog.GetQuestWatchType(id) ~= nil and L["HINT_UNTRACK"] or L["HINT_TRACK"] end
+    if onQuest then ctrl = IsWatched(id) and L["HINT_UNTRACK"] or L["HINT_TRACK"] end
     return { click = click, shift = L["HINT_LINK"], alt = L["HINT_QUEST_LOG"], ctrl = ctrl }
 end
 
@@ -280,9 +328,14 @@ local function InsertChatLink(link)
 end
 
 local function OpenQuestLog(id)
-    if C_QuestLog.IsOnQuest(id) and QuestMapFrame_OpenToQuestDetails then
+    local onQuest = C_QuestLog.IsOnQuest(id)
+    if onQuest and QuestMapFrame_OpenToQuestDetails then
         C_QuestLog.SetSelectedQuest(id)
         QuestMapFrame_OpenToQuestDetails(id)
+    elseif onQuest and QuestLog_SetSelection and QuestLogFrame and LogIndex(id) then
+        -- The classic log: shown, then set to the quest's entry.
+        ShowUIPanel(QuestLogFrame)
+        QuestLog_SetSelection(LogIndex(id))
     elseif ToggleQuestLog then
         ToggleQuestLog()
     end
@@ -290,11 +343,7 @@ end
 
 local function ToggleWatch(id)
     if not C_QuestLog.IsOnQuest(id) then return end
-    if C_QuestLog.GetQuestWatchType(id) ~= nil then
-        C_QuestLog.RemoveQuestWatch(id)
-    else
-        C_QuestLog.AddQuestWatch(id, Enum.QuestWatchType and Enum.QuestWatchType.Manual)
-    end
+    SetWatched(id, not IsWatched(id))
 end
 
 -- Shift links the quest in chat, Alt opens the log to it, Ctrl tracks or
@@ -390,9 +439,11 @@ end
 
 local function AbandonPrompt(id)
     if QuestMapQuestOptions_AbandonQuest then return QuestMapQuestOptions_AbandonQuest(id) end
-    C_QuestLog.SetSelectedQuest(id)
-    C_QuestLog.SetAbandonQuest()
-    StaticPopup_Show("ABANDON_QUEST", C_QuestLog.GetAbandonQuestName())
+    local setAbandon = C_QuestLog.SetAbandonQuest or SetAbandonQuest
+    local abandonName = C_QuestLog.GetAbandonQuestName or GetAbandonQuestName
+    if not (setAbandon and abandonName and SelectInLog(id)) then return end
+    setAbandon()
+    StaticPopup_Show("ABANDON_QUEST", abandonName())
 end
 
 -- One objective's flyout: Questie's focus and map, and our GPS to it.
@@ -450,7 +501,7 @@ local function QuestieMenu(row)
     rows[#rows + 1] = Action(L["MENU_ABANDON"], function() AbandonPrompt(id) end)
     rows[#rows + 1] = LockRow()
     local objectives = quest.Objectives
-    if objectives and next(objectives) and not C_QuestLog.IsComplete(id) then
+    if objectives and next(objectives) and not IsDone(id) then
         rows[#rows + 1] = { kind = "separator" }
         for _, objective in pairs(objectives) do
             if objective.Index then rows[#rows + 1] = ObjectiveMenu(id, quest, objective) end
@@ -495,7 +546,7 @@ end
 -- The game's mark for the quest's state; none when it is done or out of reach.
 local function QuestIcon(id, onQuest, level)
     if onQuest then
-        return C_QuestLog.IsComplete(id) and ICON_TURN_IN or ICON_IN_PROGRESS
+        return IsDone(id) and ICON_TURN_IN or ICON_IN_PROGRESS
     end
     if C_QuestLog.IsQuestFlaggedCompleted(id) then return nil end
     return Available(id, level) and ICON_AVAILABLE or nil
@@ -566,7 +617,7 @@ end
 
 local function State(id)
     if C_QuestLog.IsOnQuest(id) then
-        if C_QuestLog.IsComplete(id) then return L["STATE_TURN_IN"], 0, 1, 0 end
+        if IsDone(id) then return L["STATE_TURN_IN"], 0, 1, 0 end
         return L["STATE_IN_LOG"], 1, 0.82, 0
     end
     if C_QuestLog.IsQuestFlaggedCompleted(id) then return L["STATE_DONE"], 0.6, 0.6, 0.6 end
