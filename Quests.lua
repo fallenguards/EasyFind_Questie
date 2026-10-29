@@ -6,10 +6,14 @@ local API = EasyFind and EasyFind.API
 if not (API and API.VERSION == 1) then return end
 
 local L = ns.L
+-- The Show choice, gray marks and the rows' GPS button came in API MINOR 1.
+if (API.MINOR or 0) < 1 then
+    print("|cff66ccff" .. L["EXT_NAME"] .. ":|r " .. L["NEEDS_EASYFIND"])
+    return
+end
 local KEY = "questie"
 local ICON = "Interface\\AddOns\\EasyFind_Questie\\quest"
 local MAX_SOURCES = 12    -- drop sources read for an item objective
--- The game's own quest marks, a row's right-side icon by its state.
 -- The game's quest marks: ! to pick up, ? in the log (gray until done), a
 -- check once turned in (the ready-check mark).
 local ICON_AVAILABLE, ICON_TURN_IN, ICON_IN_PROGRESS, ICON_DONE = 132049, 132048, 365195, 136814
