@@ -10,7 +10,9 @@ local KEY = "questie"
 local ICON = "Interface\\AddOns\\EasyFind_Questie\\quest"
 local MAX_SOURCES = 12    -- drop sources read for an item objective
 -- The game's own quest marks, a row's right-side icon by its state.
-local ICON_AVAILABLE, ICON_TURN_IN, ICON_IN_PROGRESS = 132049, 132048, 365195
+-- The game's quest marks: ! to pick up, ? in the log (gray until done), a
+-- check once turned in (the ready-check mark).
+local ICON_AVAILABLE, ICON_TURN_IN, ICON_IN_PROGRESS, ICON_DONE = 132049, 132048, 365195, 136814
 
 local C_QuestLog, C_Map = C_QuestLog, C_Map
 local IsShiftKeyDown, IsAltKeyDown, IsControlKeyDown = IsShiftKeyDown, IsAltKeyDown, IsControlKeyDown
@@ -245,22 +247,23 @@ end
 
 -- The destination is named for the quest and its state ("Cave Mushrooms:
 -- pickup"); the last step's sentence says what stands there.
-local function DestFor(spots, questName, nameKey, stepKey)
+local function DestFor(spots, questName, nameKey, stepKey, icon)
     local dest = Nearest(spots)
     if not dest then return nil end
     dest.name = sformat(L[nameKey], questName)
     dest.step = L[stepKey]
+    dest.icon = icon
     return dest
 end
 
 local function StarterDest(id, questName)
     local npcs, objects = Starters(id)
-    return DestFor(ListSpots("object", objects, ListSpots("npc", npcs, {})), questName, "DEST_PICKUP_FMT", "STEP_GIVER")
+    return DestFor(ListSpots("object", objects, ListSpots("npc", npcs, {})), questName, "DEST_PICKUP_FMT", "STEP_GIVER", ICON_AVAILABLE)
 end
 
 local function FinisherDest(id, questName)
     local npcs, objects = Finishers(id)
-    return DestFor(ListSpots("object", objects, ListSpots("npc", npcs, {})), questName, "DEST_TURN_IN_FMT", "STEP_TURN_IN")
+    return DestFor(ListSpots("object", objects, ListSpots("npc", npcs, {})), questName, "DEST_TURN_IN_FMT", "STEP_TURN_IN", ICON_TURN_IN)
 end
 
 -- The spots an objective is done at, by its kind.
@@ -291,7 +294,7 @@ local function ObjectiveDest(id, questName)
     for i = 1, data and #data or 0 do
         if not (live and live[i] and live[i].finished) then
             local spots = ObjectiveSpots(data[i])
-            if #spots > 0 then return DestFor(spots, questName, "DEST_OBJECTIVE_FMT", "STEP_OBJECTIVE") end
+            if #spots > 0 then return DestFor(spots, questName, "DEST_OBJECTIVE_FMT", "STEP_OBJECTIVE", ICON_IN_PROGRESS) end
         end
     end
     return FinisherDest(id, questName)
@@ -467,7 +470,7 @@ local function ObjectiveMenu(id, quest, objective)
     local data = quest.ObjectiveData and quest.ObjectiveData[index]
     if data then
         rows[#rows + 1] = Action(L["MENU_GPS_OBJECTIVE"], function()
-            local dest = DestFor(ObjectiveSpots(data), quest.name, "DEST_OBJECTIVE_FMT", "STEP_OBJECTIVE")
+            local dest = DestFor(ObjectiveSpots(data), quest.name, "DEST_OBJECTIVE_FMT", "STEP_OBJECTIVE", ICON_IN_PROGRESS)
             if dest then Navigate(dest, dest.step) else print(sformat(L["NO_PLACE"], objective.Description or quest.name)) end
         end)
     end
@@ -538,7 +541,17 @@ local function OnMap(id, mapID)
     return false
 end
 
-local function Subtext(id)
+-- Where the player stands with the quest, in a word or two: whether it
+-- can be picked up, and if not, why when the reason is the level.
+local function StateWord(id, onQuest, level)
+    if onQuest then return L[IsDone(id) and "STATE_TURN_IN" or "STATE_IN_LOG"] end
+    if C_QuestLog.IsQuestFlaggedCompleted(id) then return L["STATE_DONE"] end
+    local need = Q.db.QueryQuestSingle(id, "requiredLevel")
+    if need and need > level then return sformat(L["STATE_NEEDS_LEVEL"], need) end
+    return L[Q.db.IsDoable(id) == true and "STATE_AVAILABLE" or "STATE_UNAVAILABLE"]
+end
+
+local function Subtext(id, onQuest, playerLevel)
     local parts = {}
     local level = Q.db.QueryQuestSingle(id, "questLevel")
     if level and level > 0 then parts[#parts + 1] = sformat(L["LEVEL_FMT"], level) end
@@ -547,16 +560,18 @@ local function Subtext(id)
     local kind, eid = FirstGiver(id)
     local giver = kind and EntityName(kind, eid)
     if giver then parts[#parts + 1] = giver end
-    return #parts > 0 and table.concat(parts, ", ") or nil
+    local state = StateWord(id, onQuest, playerLevel)
+    return #parts > 0 and sformat(L["STATE_SUBTEXT_FMT"], state, table.concat(parts, ", ")) or state
 end
 
--- The game's mark for the quest's state; none when it is done or out of reach.
+-- The game's mark for the quest's state, and whether it is drawn gray (a
+-- quest the player cannot pick up yet).
 local function QuestIcon(id, onQuest, level)
     if onQuest then
-        return IsDone(id) and ICON_TURN_IN or ICON_IN_PROGRESS
+        return IsDone(id) and ICON_TURN_IN or ICON_IN_PROGRESS, false
     end
-    if C_QuestLog.IsQuestFlaggedCompleted(id) then return nil end
-    return Available(id, level) and ICON_AVAILABLE or nil
+    if C_QuestLog.IsQuestFlaggedCompleted(id) then return ICON_DONE, false end
+    return ICON_AVAILABLE, not Available(id, level)
 end
 
 -- ==== EasyFind links ========================================================
@@ -582,8 +597,10 @@ local function ResolveShareKey(tail)
     id = tonumber(id)
     local name = id and QuestName(id)
     if not name then return nil end
-    local row = { name = name, questId = id, searchCommandDesc = Subtext(id),
-                  icon = QuestIcon(id, C_QuestLog.IsOnQuest(id), UnitLevel("player")) }
+    local onQuest, level = C_QuestLog.IsOnQuest(id), UnitLevel("player")
+    local icon, dim = QuestIcon(id, onQuest, level)
+    local row = { name = name, questId = id, searchCommandDesc = Subtext(id, onQuest, level),
+                  icon = icon, iconDimmed = dim or nil }
     if progress ~= "" then
         row.shared = {}
         for done, need in progress:gmatch("(%d+)/(%d+)") do
@@ -619,8 +636,9 @@ local function Rows()
             local keep = Shows(db, id, onQuest, level)
             if keep and here then keep = OnMap(id, here) end
             if keep then
-                out[#out + 1] = { name = name, questId = id, searchCommandDesc = Subtext(id),
-                                  icon = QuestIcon(id, onQuest, level), inLog = onQuest or nil,
+                local icon, dim = QuestIcon(id, onQuest, level)
+                out[#out + 1] = { name = name, questId = id, searchCommandDesc = Subtext(id, onQuest, level),
+                                  icon = icon, iconDimmed = dim or nil, inLog = onQuest or nil,
                                   mapID = MapOfArea(Q.db.QueryQuestSingle(id, "zoneOrSort")) }
             end
         end
