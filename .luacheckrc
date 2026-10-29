@@ -36,7 +36,7 @@ read_globals = {
     "QUESTS_LABEL", "QUEST_OBJECTIVES", "QUEST_LOG", "TRACK_QUEST", "UNTRACK_QUEST", "ABANDON_QUEST",
     "GetQuestLink", "QuestMapFrame_OpenToQuestDetails", "QuestMapQuestOptions_AbandonQuest", "GetQuestDifficultyColor",
     "GetQuestLogIndexByID", "GetQuestLogTitle", "IsQuestWatched", "AddQuestWatch", "RemoveQuestWatch", "SelectQuestLogEntry",
-    "QuestLog_SetSelection", "QuestLogFrame", "SetAbandonQuest", "GetAbandonQuestName",
+    "QuestLog_SetSelection", "QuestLogFrame", "SetAbandonQuest", "GetAbandonQuestName", "ALL",
     -- WoW Lua extensions
     "bit",
     "debugstack", "debugprofilestart", "debugprofilestop", "strsplit", "strtrim", "wipe", "hooksecurefunc",

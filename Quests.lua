@@ -68,10 +68,17 @@ end
 local Q = {}
 local ready = false
 
+-- dbVersion 2: the three state switches became one Show choice.
 local function DB()
     EasyFindQuestieDB = EasyFindQuestieDB or {}
     local db = EasyFindQuestieDB
-    if db.hideDone == nil then db.hideDone = true end
+    if (db.dbVersion or 1) < 2 then
+        if db.inLog then db.show = "inLog"
+        elseif db.available then db.show = "available"
+        elseif db.hideDone == false then db.show = "all" end
+        db.inLog, db.available, db.hideDone = nil, nil, nil
+        db.dbVersion = 2
+    end
     return db
 end
 
@@ -586,6 +593,19 @@ local function ResolveShareKey(tail)
     return row
 end
 
+-- Which quests the search lists, by their state.
+local SHOW_DEFAULT = "notDone"
+local function Shows(db, id, onQuest, level)
+    local show = db.show or SHOW_DEFAULT
+    if show == "all" then return true end
+    if show == "inLog" then return onQuest end
+    local done = C_QuestLog.IsQuestFlaggedCompleted(id)
+    if show == "done" then return done end
+    if done then return false end
+    if show == "available" then return not onQuest and Available(id, level) end
+    return true
+end
+
 local function Rows()
     if not ready then return {} end
     local db = DB()
@@ -596,9 +616,7 @@ local function Rows()
         local name = QuestName(id)
         if name then
             local onQuest = C_QuestLog.IsOnQuest(id)
-            local keep = not (db.hideDone and C_QuestLog.IsQuestFlaggedCompleted(id))
-            if keep and db.inLog then keep = onQuest end
-            if keep and db.available and not onQuest then keep = Available(id, level) end
+            local keep = Shows(db, id, onQuest, level)
             if keep and here then keep = OnMap(id, here) end
             if keep then
                 out[#out + 1] = { name = name, questId = id, searchCommandDesc = Subtext(id),
@@ -700,29 +718,33 @@ local function WatchZone()
     if DB().nearMe then events:RegisterEvent("ZONE_CHANGED_NEW_AREA") else events:UnregisterEvent("ZONE_CHANGED_NEW_AREA") end
 end
 
-local function Option(key, label, tip)
-    return {
-        label = label, tooltip = tip,
-        get = function() return DB()[key] == true end,
-        set = function(on)
-            DB()[key] = on or nil
-            WatchZone()
-            Refresh()
-        end,
-    }
+-- One state to show (a quest is in only one), and the zone on its own.
+local SHOW_CHOICES = {
+    { label = L["SHOW_NOT_DONE"], value = "notDone", tooltip = L["SHOW_NOT_DONE_TIP"] },
+    { label = L["OPT_AVAILABLE"], value = "available", tooltip = L["OPT_AVAILABLE_TIP"] },
+    { label = L["OPT_IN_LOG"], value = "inLog", tooltip = L["OPT_IN_LOG_TIP"] },
+    { label = L["SHOW_DONE"], value = "done", tooltip = L["SHOW_DONE_TIP"] },
+    { label = L["SHOW_ALL"], value = "all", tooltip = L["SHOW_ALL_TIP"] },
+}
+local function GetShow() return DB().show or SHOW_DEFAULT end
+local function SetShow(value)
+    DB().show = value ~= SHOW_DEFAULT and value or nil
+    Refresh()
+end
+local function GetNearMe() return DB().nearMe == true end
+local function SetNearMe(on)
+    DB().nearMe = on or nil
+    WatchZone()
+    Refresh()
 end
 
-local OPTIONS = {
-    { key = "available", label = L["OPT_AVAILABLE"], tip = L["OPT_AVAILABLE_TIP"] },
-    { key = "inLog", label = L["OPT_IN_LOG"], tip = L["OPT_IN_LOG_TIP"] },
-    { key = "hideDone", label = L["OPT_HIDE_DONE"], tip = L["OPT_HIDE_DONE_TIP"] },
-    { key = "nearMe", label = L["OPT_NEAR_ME"], tip = L["OPT_NEAR_ME_TIP"] },
-}
-
 local function FilterOptions()
-    local out = {}
-    for i = 1, #OPTIONS do out[i] = Option(OPTIONS[i].key, OPTIONS[i].label, OPTIONS[i].tip) end
-    return out
+    return {
+        { header = L["OPT_SHOW"] },
+        { choice = SHOW_CHOICES, get = GetShow, set = SetShow },
+        { separator = true },
+        { label = L["OPT_NEAR_ME"], tooltip = L["OPT_NEAR_ME_TIP"], get = GetNearMe, set = SetNearMe },
+    }
 end
 
 API.RegisterExtension({
@@ -734,12 +756,10 @@ API.RegisterExtension({
     scope = KEY,
     settings = function(page, kit)
         local below = kit.Title(page, L["EXT_NAME"], L["SETTINGS_HINT"])
-        local opts = FilterOptions()
-        for i = 1, #opts do
-            local box = kit.Checkbox(page, opts[i].label, opts[i].get, opts[i].set, opts[i].tooltip)
-            box:SetPoint("TOPLEFT", below, "BOTTOMLEFT", 0, i == 1 and -8 or -4)
-            below = box
-        end
+        local show = kit.Choice(page, L["OPT_SHOW"], SHOW_CHOICES, GetShow, SetShow, L["OPT_SHOW_TIP"], SHOW_DEFAULT)
+        show:SetPoint("TOPLEFT", below, "BOTTOMLEFT", 0, -8)
+        local near = kit.Checkbox(page, L["OPT_NEAR_ME"], GetNearMe, SetNearMe, L["OPT_NEAR_ME_TIP"])
+        near:SetPoint("TOPLEFT", show, "BOTTOMLEFT", 0, -4)
     end,
 })
 
