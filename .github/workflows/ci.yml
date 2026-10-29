@@ -16,3 +16,20 @@ jobs:
         with:
           files: '.'
           args: '--no-color -q'
+
+  smoke:
+    name: Smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: '5.4'
+      - name: Load the addon (EasyFind there, missing or too old; Questie ready; settings from before the Show choice)
+        run: |
+          status=0
+          for mode in normal noapi oldapi questie old; do
+            echo "== $mode"
+            lua tools/tests/smoke_test.lua . EasyFind_Questie.toc EasyFind_Questie "$mode" || status=1
+          done
+          exit $status
