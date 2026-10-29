@@ -1,20 +1,19 @@
 # EasyFind: Questie Extension
 
-Questie's quests in EasyFind's search bar. Type a quest's name and the row shows where you stand with it, its level, zone and giver, with the game's quest mark for its state (grayed while you cannot take it yet). A click asks EasyFind's GPS for directions: to the giver when you have not picked the quest up, to the first open objective while it is in your log, and to the turn-in once it is complete. Hovering a row shows the objectives.
+Search Questie's quests from EasyFind's search bar and get directions to them.
 
-Requires Questie and EasyFind.
+## Requirements
 
-## What it adds
+- EasyFind 4.0.1 or later
+- Questie
 
-- Quest rows in EasyFind's search results, and an `@quest` scope that lists only quests.
-- A Quests row in the filter menu: Show (Not turned in, Available to me, In my log, Turned in, All) and Near me.
-- A Questie tile in the extensions menu, with the same settings in Options > Extensions.
+Classic Era, TBC Anniversary, Mists of Pandaria Classic and WoW Forever.
 
-## Dependencies
+## Features
 
-- EasyFind 4.0.1 or later (extension API 1.1). With an older EasyFind the addon says so in chat and stays off.
-- Questie, which this addon reads at runtime through its API and its quest database. Nothing of Questie's is copied into this addon.
-
-## How it reads Questie
-
-The addon waits for `Questie.API.RegisterOnReady`, then looks for Questie's quest database functions. If a function it needs is missing in the installed Questie version, quest search turns itself off with one line in chat and nothing else changes. Questie's settings are never written.
+- Search any quest by name.
+- Each result shows the quest's level, zone and quest giver, and whether it's available, in your log or ready to turn in.
+- Click a quest for directions to the quest giver, your next objective or the turn-in.
+- Hover a quest to see its objectives and your progress.
+- Type `@quest` to list only quests, with your quest log first.
+- Filter by available, in your log, not turned in, turned in or all, and limit the list to your current zone.
