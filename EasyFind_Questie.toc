@@ -2,7 +2,7 @@
 ## Title: EasyFind [Questie]
 ## Notes: Questie's quests in EasyFind's search bar: find one by name, get directions. Requires Questie.
 ## Author: justawower
-## Version: 0.1.0
+## Version: 1.0.0
 ## IconTexture: Interface\AddOns\EasyFind\textures\SpyglassMinimap
 ## Group: EasyFind
 ## Category: UI
