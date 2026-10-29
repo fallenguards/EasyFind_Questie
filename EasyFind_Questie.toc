@@ -3,6 +3,7 @@
 ## Notes: Questie's quests in EasyFind's search bar: find one by name, get directions. Requires Questie.
 ## Author: justawower
 ## Version: 1.0.0
+## X-Curse-Project-ID: 1772143
 ## IconTexture: Interface\AddOns\EasyFind\textures\SpyglassMinimap
 ## Group: EasyFind
 ## Category: UI
