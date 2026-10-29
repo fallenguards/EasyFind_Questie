@@ -192,16 +192,8 @@ local function SpawnSpots(spawns, name, out)
     return out
 end
 
--- A creature's spots: EasyFind's own catalog when it offers them, else
--- Questie's spawns.
+-- A creature's spots from Questie's spawns.
 local function NpcSpots(npcId, out)
-    if API.HasAction("gps", "npcSpots") then
-        local spots = API.CallAction("gps", "npcSpots", npcId)
-        if type(spots) == "table" and #spots > 0 then
-            for i = 1, #spots do out[#out + 1] = spots[i] end
-            return out
-        end
-    end
     return SpawnSpots(Q.db.QueryNPCSingle(npcId, "spawns"), EntityName("npc", npcId), out)
 end
 
@@ -627,6 +619,12 @@ local function Shows(db, id, onQuest, level)
     return true
 end
 
+-- The log's quests lead, by name: what an empty @quest lists.
+local function LogFirst(a, b)
+    if (a.inLog or false) ~= (b.inLog or false) then return a.inLog == true end
+    return a.name < b.name
+end
+
 local function Rows()
     if not ready then return {} end
     local db = DB()
@@ -647,11 +645,7 @@ local function Rows()
             end
         end
     end
-    -- The log's quests lead, by name: what an empty @quest lists.
-    table.sort(out, function(a, b)
-        if (a.inLog or false) ~= (b.inLog or false) then return a.inLog == true end
-        return a.name < b.name
-    end)
+    table.sort(out, LogFirst)
     return out
 end
 
