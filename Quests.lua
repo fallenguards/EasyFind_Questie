@@ -242,13 +242,15 @@ local function Navigate(dest, step)
 end
 
 -- The destination is named for the quest and its state ("Cave Mushrooms:
--- pickup"); the last step's sentence says what stands there.
+-- pickup"); the last step's sentence says what stands there. Its category
+-- is the provider's, so the route's end pin draws the mark in its well.
 local function DestFor(spots, questName, nameKey, stepKey, icon)
     local dest = Nearest(spots)
     if not dest then return nil end
     dest.name = sformat(L[nameKey], questName)
     dest.step = L[stepKey]
     dest.icon = icon
+    dest.category = KEY
     return dest
 end
 
@@ -785,6 +787,8 @@ API.RegisterSearchProvider({
     extension = KEY,
     words = { "quest", "quests" },
     aliases = { "quest", "quests", "questie" },
+    -- The game's small "!" and "?" are lost in the map's art on its pin.
+    iconWell = true,
     options = FilterOptions(),
     rows = Rows,
     select = Select,
