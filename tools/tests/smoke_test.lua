@@ -83,13 +83,18 @@ if mode ~= "noapi" then
     function API.RegisterExtension(def) registered.extensions[def.id] = def return true end
     function API.RegisterSearchProvider(def) registered.providers[def.key] = def return true end
     function API.RefreshSearchProvider() end
-    function API.HasAction() return false end
+    -- The GPS is installed in the questie mode: its entry joins Questie's menu.
+    function API.HasAction(id, name) return mode == "questie" and id == "gps" and name == "navigate" end
     function API.CallAction() end
     _G.EasyFind = { API = API }
 end
 local onReady
+-- Questie's tracker menu module, as its tracker calls it: a list ending in Cancel.
+local trackerMenu = { GetMenuForQuest = function() return { { text = "Focus Quest" }, { text = "Cancel" } } end }
 if mode == "questie" then
     _G.Questie = { API = { RegisterOnReady = function(fn) onReady = fn end } }
+    _G.QuestieLoader = { ImportModule = function(_, name) if name == "TrackerMenu" then return trackerMenu end end }
+    _G.CANCEL = "Cancel"
 end
 if mode == "old" then _G.EasyFindQuestieDB = { inLog = true } end
 
@@ -151,6 +156,10 @@ if mode == "questie" then
     local ok = onReady and pcall(onReady)
     Check(ok and printed[#printed] ~= nil and printed[#printed]:find("not available", 1, true) ~= nil,
         "no quest data: says quest search is off")
+    local menu = trackerMenu.GetMenuForQuest(trackerMenu, { Id = 7 })
+    Check(#menu == 3 and menu[2].text == "Directions" and menu[3].text == "Cancel",
+        "Directions in Questie's tracker menu, before Cancel")
+    Check(menu[2].func ~= nil and pcall(menu[2].func), "its entry runs")
 end
 for i = 1, #frames do
     local f = frames[i]

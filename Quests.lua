@@ -95,6 +95,7 @@ local function Bind()
     if not (Loader and Loader.ImportModule) then return false end
     local QDB = Loader:ImportModule("QuestieDB")
     local Zones = Loader:ImportModule("ZoneDB")
+    if type(QDB) ~= "table" or type(Zones) ~= "table" then return false end
     local need = { "QueryQuestSingle", "QueryNPCSingle", "QueryObjectSingle", "QueryItemSingle", "GetQuest", "IsDoable" }
     for i = 1, #need do
         if type(QDB[need[i]]) ~= "function" then return false end
@@ -362,13 +363,22 @@ local function Select(row)
     if IsShiftKeyDown() then return InsertChatLink(QuestLink(id, row.name)) end
     if IsAltKeyDown() then return OpenQuestLog(id) end
     if IsControlKeyDown() then return ToggleWatch(id) end
-    local dest = QuestDest(id, row.name)
+    ns.Directions(id, row.name)
+end
+
+-- Directions to the quest's current step (the giver, the next objective,
+-- the turn-in); said when it has none. A row's plain click, and the entry
+-- in Questie's own tracker menu (TrackerMenu.lua).
+function ns.Directions(id, name)
+    if not ready then return end
+    name = name or QuestName(id) or ""
+    local dest = QuestDest(id, name)
     if dest then return Navigate(dest, dest.step) end
     local _, _, items = Starters(id)
     if not C_QuestLog.IsOnQuest(id) and items and items[1] then
-        print(sformat(L["ITEM_START"], row.name, EntityName("item", items[1]) or items[1]))
+        print(sformat(L["ITEM_START"], name, EntityName("item", items[1]) or items[1]))
     else
-        print(sformat(L["NO_PLACE"], row.name))
+        print(sformat(L["NO_PLACE"], name))
     end
 end
 
@@ -813,6 +823,7 @@ local function OnReady()
     Questie.API.RegisterForQuestUpdates(Refresh)
     events:RegisterEvent("PLAYER_LEVEL_UP")
     WatchZone()
+    if ns.InstallTrackerMenu then ns.InstallTrackerMenu() end
     API.RefreshSearchProvider(KEY)
 end
 
