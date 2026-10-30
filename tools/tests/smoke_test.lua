@@ -1,5 +1,5 @@
 -- Loads an addon's toc files against a stubbed game and a recording EasyFind.API, then checks what it
--- registered. Usage: lua smoke_test.lua <addon dir> <toc> <addon name> [noapi|oldapi|questie|old]
+-- registered. Usage: lua smoke_test.lua <addon dir> <toc> <addon name> [noapi|oldapi|questie|old|noquestie]
 -- noapi: no EasyFind; oldapi: EasyFind before API MINOR 1; questie: Questie says it is ready without its
 -- quest data; old: settings saved before the Show choice.
 -- luacheck: std lua54
@@ -64,6 +64,8 @@ _G.InCombatLockdown = function() return false end
 _G.UnitLevel = function() return 10 end
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 _G.C_Timer = { After = function() end, NewTicker = function() return Stub() end, NewTimer = function() return Stub() end }
+-- Loaded beside Questie (OptionalDeps): the files return at once without it.
+_G.C_AddOns = { IsAddOnLoaded = function(name) return name == "Questie" and mode ~= "noquestie" end }
 _G.strsplit = function(sep, s) local out = {} for p in s:gmatch("[^" .. sep .. "]+") do out[#out + 1] = p end return table.unpack(out) end
 _G.unpack = table.unpack
 _G.tinsert, _G.tremove = table.insert, table.remove
@@ -119,8 +121,8 @@ local function Check(ok, what)
 end
 
 local ext, provider = registered.extensions.questie, registered.providers.questie
-if mode == "noapi" or mode == "oldapi" then
-    Check(ext == nil and provider == nil, "nothing registered without EasyFind API 1.1")
+if mode == "noapi" or mode == "oldapi" or mode == "noquestie" then
+    Check(ext == nil and provider == nil, "nothing registered without EasyFind API 1.1 or Questie")
     if mode == "oldapi" then
         Check(printed[1] ~= nil and printed[1]:find("newer EasyFind", 1, true) ~= nil, "says EasyFind needs an update")
     end

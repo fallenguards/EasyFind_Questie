@@ -11,6 +11,9 @@ if (API.MINOR or 0) < 1 then
     print("|cff66ccff" .. L["EXT_NAME"] .. ":|r " .. L["NEEDS_EASYFIND"])
     return
 end
+-- Loaded beside Questie (OptionalDeps), nothing without it.
+local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+if not (IsAddOnLoaded and IsAddOnLoaded("Questie")) then return end
 local KEY = "questie"
 local ICON = "Interface\\AddOns\\EasyFind_Questie\\quest"
 local MAX_SOURCES = 12    -- drop sources read for an item objective

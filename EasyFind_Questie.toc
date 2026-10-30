@@ -8,8 +8,7 @@
 ## Group: EasyFind
 ## Category: UI
 ## Dependencies: EasyFind
-## LoadOnDemand: 1
-## LoadWith: Questie
+## OptionalDeps: Questie
 ## SavedVariables: EasyFindQuestieDB
 ## DefaultState: enabled
 
