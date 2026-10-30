@@ -7,7 +7,9 @@
 ## IconTexture: Interface\AddOns\EasyFind\textures\SpyglassMinimap
 ## Group: EasyFind
 ## Category: UI
-## Dependencies: EasyFind, Questie
+## Dependencies: EasyFind
+## LoadOnDemand: 1
+## LoadWith: Questie
 ## SavedVariables: EasyFindQuestieDB
 ## DefaultState: enabled
 
