@@ -132,6 +132,7 @@ end
 Check(ext ~= nil and type(ext.name) == "string" and ext.icon ~= nil, "the extension, with its name and icon")
 Check(provider ~= nil and provider.extension == "questie", "its search provider, under the extension")
 Check(provider ~= nil and type(provider.label) == "string", "the provider's label is text: " .. tostring(provider and provider.label))
+Check(provider ~= nil and provider.lowResults == true, "a quest's name alone finds it, without quest or @quest")
 for _, fn in ipairs({ "rows", "select", "tooltip", "hint", "place", "menu", "browse" }) do
     Check(provider ~= nil and type(provider[fn]) == "function", "provider." .. fn)
 end

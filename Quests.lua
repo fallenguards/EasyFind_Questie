@@ -799,6 +799,9 @@ API.RegisterSearchProvider({
     label = L["PROVIDER_LABEL"],
     extension = KEY,
     words = { "quest", "quests" },
+    -- A quest's name alone finds it: loaded once a search finds little,
+    -- then searched every time after.
+    lowResults = true,
     aliases = { "quest", "quests", "questie" },
     -- The game's small "!" and "?" are lost in the map's art on its pin.
     iconWell = true,
