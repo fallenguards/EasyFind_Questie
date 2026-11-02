@@ -1,0 +1,15 @@
+name: Feature Request
+description: Something the extension should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This tracker is for **EasyFind: Questie Extension**: its folder is `EasyFind_Questie`. Requests about Questie's own quest data, map icons or tracker belong with Questie.
+  - type: textarea
+    id: request
+    attributes:
+      label: What would you like?
+      description: What it should do and what it would be for. A screenshot of the part of the screen helps.
+    validations:
+      required: true

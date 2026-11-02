@@ -1,0 +1,60 @@
+name: Bug Report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This tracker is for **EasyFind: Questie Extension**: its folder is `EasyFind_Questie`. It needs EasyFind and Questie installed.
+  - type: textarea
+    id: report
+    attributes:
+      label: What happened?
+      description: What you saw and what you expected instead. Say which quest it is about and what you typed.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen
+      description: What you typed in EasyFind, then what you clicked, in order.
+      placeholder: |
+        1. Type "homeward bound"
+        2. Click ...
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: EasyFind, Questie and this extension, as the AddOns list shows them, and which game client (Classic Era, TBC Anniversary, Mists Classic, WoW Forever).
+    validations:
+      required: true
+  - type: textarea
+    id: errors
+    attributes:
+      label: Lua errors
+      description: |
+        If the game showed an error, paste the first one here. To see errors, type `/console scriptErrors 1`.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: A screenshot helps more than anything. Drag the image into this box.
+    validations:
+      required: false
+  - type: dropdown
+    id: alone
+    attributes:
+      label: Does it still happen with only EasyFind, Questie and this extension turned on?
+      description: Turn everything else off in the addon list, reload the interface and try once more.
+      options:
+        - "Yes, it still happens with only these on"
+        - "No, it goes away with the rest turned off (say which one above if you found it)"
+        - "I have no other addons"
+        - "I did not try"
+    validations:
+      required: true
