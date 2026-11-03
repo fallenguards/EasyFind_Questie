@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] - 2026-11-03
+
+- A quest's name alone finds it in EasyFind's search; no need to type "quest" or "@quest" first.
+- Directions in Questie's own quest tracker menu: right-click a tracked quest and pick Directions.
+- Quests the game names alike in one chain say which part they are, such as "The Forging of Quel'Serrar (part 1)" and "(part 2)".
+- A quest you are not yet high enough for says the level once: "Needs level 60", no longer "Needs level 60: Level 60".
+- No longer requires Questie: with Questie turned off it stays quiet instead of failing to load.
+- The quest mark on a map pin sits in a round well, so it no longer gets lost in the map's art.
+
 ## [1.0.0] - 2026-10-29
 
 - Search Questie's quests by name from EasyFind's search bar.
