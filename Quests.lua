@@ -564,14 +564,17 @@ end
 
 local function Subtext(id, onQuest, playerLevel)
     local parts = {}
+    local state = StateWord(id, onQuest, playerLevel)
     local level = Q.db.QueryQuestSingle(id, "questLevel")
-    if level and level > 0 then parts[#parts + 1] = sformat(L["LEVEL_FMT"], level) end
+    -- "Needs level 60" says it already: no "Level 60" after it.
+    if level and level > 0 and state ~= sformat(L["STATE_NEEDS_LEVEL"], level) then
+        parts[#parts + 1] = sformat(L["LEVEL_FMT"], level)
+    end
     local zone = ZoneName(id)
     if zone then parts[#parts + 1] = zone end
     local kind, eid = FirstGiver(id)
     local giver = kind and EntityName(kind, eid)
     if giver then parts[#parts + 1] = giver end
-    local state = StateWord(id, onQuest, playerLevel)
     return #parts > 0 and sformat(L["STATE_SUBTEXT_FMT"], state, table.concat(parts, ", ")) or state
 end
 
@@ -836,3 +839,6 @@ end
 if Questie and Questie.API and Questie.API.RegisterOnReady then
     Questie.API.RegisterOnReady(OnReady)
 end
+
+-- For the smoke test: the subtext against a stand-in quest database.
+ns.Q, ns.Subtext = Q, Subtext

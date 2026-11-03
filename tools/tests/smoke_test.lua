@@ -164,6 +164,21 @@ if mode == "questie" then
         "Directions in Questie's tracker menu, before Cancel")
     Check(menu[2].func ~= nil and pcall(menu[2].func), "its entry runs")
 end
+-- A row's line names a level once: "Needs level 60", never "Needs level 60: Level 60".
+if ns.Subtext then
+    rawset(env.C_QuestLog, "IsQuestFlaggedCompleted", function() return false end)
+    local quest = { questLevel = 60, requiredLevel = 60 }
+    ns.Q.db = {
+        QueryQuestSingle = function(_, field) return quest[field] end,
+        IsDoable = function() return false end,
+    }
+    local ok, line = pcall(ns.Subtext, 7509, false, 10)
+    Check(ok and line == "Needs level 60", "the needed level said once: " .. tostring(line))
+    quest.requiredLevel = 58
+    ok, line = pcall(ns.Subtext, 7509, false, 10)
+    Check(ok and line == "Needs level 58: Level 60", "a different quest level still shown: " .. tostring(line))
+    ns.Q.db = nil
+end
 for i = 1, #frames do
     local f = frames[i]
     if f.scripts.OnEvent then
