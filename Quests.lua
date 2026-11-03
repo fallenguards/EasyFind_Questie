@@ -605,12 +605,56 @@ local function ShareKey(row)
     return key
 end
 
+-- Quests the game names alike that one chain links: each one's part,
+-- numbered on the first full pass over Questie's quests; nil until then.
+local partOf
+
+-- One name's quests: where Questie's links make each a simple chain, its
+-- parts by order. Any fork leaves the name's quests unnumbered.
+local function NumberChains(ids)
+    local inGroup = {}
+    for i = 1, #ids do inGroup[ids[i]] = true end
+    local before, after, fork = {}, {}, false
+    local function Link(a, b)
+        if a == b or not (inGroup[a] and inGroup[b]) or after[a] == b then return end
+        if after[a] or before[b] then fork = true return end
+        after[a], before[b] = b, a
+    end
+    for i = 1, #ids do
+        local id = ids[i]
+        local single = Q.db.QueryQuestSingle(id, "preQuestSingle")
+        for j = 1, type(single) == "table" and #single or 0 do Link(single[j], id) end
+        local group = Q.db.QueryQuestSingle(id, "preQuestGroup")
+        for j = 1, type(group) == "table" and #group or 0 do Link(math.abs(group[j]), id) end
+        local nextId = Q.db.QueryQuestSingle(id, "nextQuestInChain")
+        if nextId and nextId ~= 0 then Link(id, nextId) end
+    end
+    if fork then return end
+    for i = 1, #ids do
+        local at = ids[i]
+        if after[at] and not before[at] then
+            local n = 0
+            while at and not partOf[at] do
+                n = n + 1
+                partOf[at] = n
+                at = after[at]
+            end
+        end
+    end
+end
+
+local function Labeled(id, name)
+    local part = partOf and partOf[id]
+    return part and sformat(L["PART_FMT"], name, part) or name
+end
+
 local function ResolveShareKey(tail)
     if not ready then return nil end
     local id, progress = tail:match("^(%d+):?(.*)$")
     id = tonumber(id)
     local name = id and QuestName(id)
     if not name then return nil end
+    name = Labeled(id, name)
     local onQuest, level = C_QuestLog.IsOnQuest(id), UnitLevel("player")
     local icon, dim = QuestIcon(id, onQuest, level)
     local row = { name = name, questId = id, searchCommandDesc = Subtext(id, onQuest, level),
@@ -649,8 +693,16 @@ local function Rows()
     local level = UnitLevel("player")
     local here = db.nearMe and C_Map.GetBestMapForUnit("player") or nil
     local out = {}
+    -- The first pass also gathers each name's quests, for their parts.
+    local named = not partOf and {} or nil
     for id in pairs(Q.db.QuestPointers) do
         local name = QuestName(id)
+        if name and named then
+            local had = named[name]
+            if had == nil then named[name] = id
+            elseif type(had) == "number" then named[name] = { had, id }
+            else had[#had + 1] = id end
+        end
         if name then
             local onQuest = C_QuestLog.IsOnQuest(id)
             local keep = Shows(db, id, onQuest, level)
@@ -663,6 +715,13 @@ local function Rows()
             end
         end
     end
+    if named then
+        partOf = {}
+        for _, ids in pairs(named) do
+            if type(ids) == "table" then NumberChains(ids) end
+        end
+    end
+    for i = 1, #out do out[i].name = Labeled(out[i].questId, out[i].name) end
     table.sort(out, LogFirst)
     return out
 end

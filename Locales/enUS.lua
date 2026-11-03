@@ -25,6 +25,7 @@ L["SHOW_ALL_TIP"] = "Every quest Questie knows."
 L["OPT_NEAR_ME"] = "Near me"
 L["OPT_NEAR_ME_TIP"] = "Only quests that start or play out in the zone you are in."
 
+L["PART_FMT"] = "%s (part %d)"
 L["LEVEL_FMT"] = "Level %d"
 L["LEVEL_REQ_FMT"] = "Level %d, needs level %d"
 L["STARTS_AT"] = "Starts at %s"

@@ -1,7 +1,8 @@
 -- Loads an addon's toc files against a stubbed game and a recording EasyFind.API, then checks what it
--- registered. Usage: lua smoke_test.lua <addon dir> <toc> <addon name> [noapi|oldapi|questie|old|noquestie]
+-- registered. Usage: lua smoke_test.lua <addon dir> <toc> <addon name> [noapi|oldapi|questie|data|old|noquestie]
 -- noapi: no EasyFind; oldapi: EasyFind before API MINOR 1; questie: Questie says it is ready without its
--- quest data; old: settings saved before the Show choice.
+-- quest data; data: Questie ready with a stand-in quest database; old: settings saved before the Show
+-- choice.
 -- luacheck: std lua54
 -- luacheck: ignore 111 112 113 121 122 212
 local dir, tocName, addon, mode = arg[1], arg[2], arg[3], arg[4] or "normal"
@@ -93,9 +94,32 @@ end
 local onReady
 -- Questie's tracker menu module, as its tracker calls it: a list ending in Cancel.
 local trackerMenu = { GetMenuForQuest = function() return { { text = "Focus Quest" }, { text = "Cancel" } } end }
-if mode == "questie" then
-    _G.Questie = { API = { RegisterOnReady = function(fn) onReady = fn end } }
-    _G.QuestieLoader = { ImportModule = function(_, name) if name == "TrackerMenu" then return trackerMenu end end }
+-- Two quests the game names alike, one leading to the other, and two alike with no link (one per faction).
+local quests = {
+    [7507] = { name = "Foror's Compendium", nextQuestInChain = 7508 },
+    [7508] = { name = "The Forging of Quel'Serrar", preQuestSingle = { 7507 } },
+    [7509] = { name = "The Forging of Quel'Serrar", preQuestSingle = { 7508 } },
+    [100] = { name = "Twin Errand" },
+    [101] = { name = "Twin Errand" },
+}
+local questDB = {
+    QuestPointers = {},
+    QueryQuestSingle = function(id, field) return quests[id] and quests[id][field] end,
+    QueryNPCSingle = function() return nil end,
+    QueryObjectSingle = function() return nil end,
+    QueryItemSingle = function() return nil end,
+    GetQuest = function() return nil end,
+    IsDoable = function() return false end,
+}
+for id in pairs(quests) do questDB.QuestPointers[id] = true end
+local zoneDB = { GetUiMapIdByAreaId = function() return nil end }
+if mode == "questie" or mode == "data" then
+    _G.Questie = { API = { RegisterOnReady = function(fn) onReady = fn end, RegisterForQuestUpdates = function() end } }
+    _G.QuestieLoader = { ImportModule = function(_, name)
+        if name == "TrackerMenu" then return trackerMenu end
+        if mode == "data" and name == "QuestieDB" then return questDB end
+        if mode == "data" and name == "ZoneDB" then return zoneDB end
+    end }
     _G.CANCEL = "Cancel"
 end
 if mode == "old" then _G.EasyFindQuestieDB = { inLog = true } end
@@ -165,9 +189,23 @@ if mode == "questie" then
     Check(menu[2].func ~= nil and pcall(menu[2].func), "its entry runs")
 end
 -- A row's line names a level once: "Needs level 60", never "Needs level 60: Level 60".
+if mode == "data" then
+    rawset(env.C_QuestLog, "IsQuestFlaggedCompleted", function() return false end)
+    local ok = onReady and pcall(onReady)
+    Check(ok, "Questie ready with its quest data")
+    local rows
+    ok, rows = pcall(provider.rows)
+    local byId = {}
+    for _, r in ipairs(ok and rows or {}) do byId[r.questId] = r.name end
+    Check(byId[7508] == "The Forging of Quel'Serrar (part 1)" and byId[7509] == "The Forging of Quel'Serrar (part 2)",
+        "alike names one chain links are numbered: " .. tostring(byId[7508]) .. " / " .. tostring(byId[7509]))
+    Check(byId[7507] == "Foror's Compendium", "a name of its own keeps it")
+    Check(byId[100] == "Twin Errand" and byId[101] == "Twin Errand", "alike names with no link stay as the game has them")
+end
 if ns.Subtext then
     rawset(env.C_QuestLog, "IsQuestFlaggedCompleted", function() return false end)
     local quest = { questLevel = 60, requiredLevel = 60 }
+    local bound = ns.Q.db
     ns.Q.db = {
         QueryQuestSingle = function(_, field) return quest[field] end,
         IsDoable = function() return false end,
@@ -177,7 +215,7 @@ if ns.Subtext then
     quest.requiredLevel = 58
     ok, line = pcall(ns.Subtext, 7509, false, 10)
     Check(ok and line == "Needs level 58: Level 60", "a different quest level still shown: " .. tostring(line))
-    ns.Q.db = nil
+    ns.Q.db = bound
 end
 for i = 1, #frames do
     local f = frames[i]
