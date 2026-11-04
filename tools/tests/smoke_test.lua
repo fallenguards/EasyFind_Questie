@@ -89,6 +89,7 @@ if mode ~= "noapi" then
     -- The GPS is installed in the questie mode: its entry joins Questie's menu.
     function API.HasAction(id, name) return mode == "questie" and id == "gps" and name == "navigate" end
     function API.CallAction() end
+    function API.RegisterTrackerPiece(frame, show) registered.tracker = { frame = frame, show = show } end
     _G.EasyFind = { API = API }
 end
 local onReady
@@ -113,13 +114,18 @@ local questDB = {
 }
 for id in pairs(quests) do questDB.QuestPointers[id] = true end
 local zoneDB = { GetUiMapIdByAreaId = function() return nil end }
+-- Questie's tracker frame and module, its own show counted.
+local trackerShows = 0
+local trackerModule = { Show = function() trackerShows = trackerShows + 1 end }
 if mode == "questie" or mode == "data" then
     _G.Questie = { API = { RegisterOnReady = function(fn) onReady = fn end, RegisterForQuestUpdates = function() end } }
     _G.QuestieLoader = { ImportModule = function(_, name)
         if name == "TrackerMenu" then return trackerMenu end
         if mode == "data" and name == "QuestieDB" then return questDB end
         if mode == "data" and name == "ZoneDB" then return zoneDB end
+        if mode == "data" and name == "QuestieTracker" then return trackerModule end
     end }
+    if mode == "data" then _G.Questie_BaseFrame = { Hide = function() end } end
     _G.CANCEL = "Cancel"
 end
 if mode == "old" then _G.EasyFindQuestieDB = { inLog = true } end
@@ -193,6 +199,10 @@ if mode == "data" then
     rawset(env.C_QuestLog, "IsQuestFlaggedCompleted", function() return false end)
     local ok = onReady and pcall(onReady)
     Check(ok, "Questie ready with its quest data")
+    local tracker = registered.tracker
+    Check(tracker ~= nil and tracker.frame == _G.Questie_BaseFrame, "Questie's tracker goes with Toggle Objective Tracker")
+    Check(tracker ~= nil and tracker.show ~= nil and pcall(tracker.show) and trackerShows == 1,
+        "and comes back through Questie's own show")
     local rows
     ok, rows = pcall(provider.rows)
     local byId = {}

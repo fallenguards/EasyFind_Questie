@@ -882,7 +882,19 @@ API.RegisterSearchProvider({
     menu = QuestieMenu,
 })
 
+-- Questie's tracker stands in for the game's quest watch: it hides and shows
+-- with EasyFind's Toggle Objective Tracker (API MINOR 9), and comes back
+-- through Questie's own show, so its rules (instances, nothing tracked) hold.
+local function RegisterTracker()
+    local base = _G.Questie_BaseFrame
+    if not (base and API.RegisterTrackerPiece) then return end
+    local tracker = QuestieLoader:ImportModule("QuestieTracker")
+    local show = tracker and type(tracker.Show) == "function" and function() tracker:Show() end or nil
+    API.RegisterTrackerPiece(base, show)
+end
+
 local function OnReady()
+    RegisterTracker()
     if not Bind() then
         print("|cff66ccff" .. L["EXT_NAME"] .. ":|r " .. L["NOT_READY"])
         return
