@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.0] - 2026-11-04
+
+- Questie's tracker hides and shows with EasyFind's Toggle Objective Tracker; needs EasyFind 5.1.0 or later.
+
 ## [1.1.0] - 2026-11-03
 
 - A quest's name alone finds it in EasyFind's search; no need to type "quest" or "@quest" first.
