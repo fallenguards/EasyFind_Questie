@@ -64,7 +64,18 @@ _G.GetTime = function() return 100 end
 _G.InCombatLockdown = function() return false end
 _G.UnitLevel = function() return 10 end
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
-_G.C_Timer = { After = function() end, NewTicker = function() return Stub() end, NewTimer = function() return Stub() end }
+-- Timers wait until RunTimers, which runs them in order (slices queue more).
+local timers = {}
+local function RunTimers()
+    for _ = 1, 1000 do
+        local fn = table.remove(timers, 1)
+        if not fn then return end
+        fn()
+    end
+end
+_G.C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end, NewTicker = function() return Stub() end,
+               NewTimer = function() return Stub() end }
+_G.debugprofilestop = function() return os.clock() * 1000 end
 -- Loaded beside Questie (OptionalDeps): the files return at once without it.
 _G.C_AddOns = { IsAddOnLoaded = function(name) return name == "Questie" and mode ~= "noquestie" end }
 _G.strsplit = function(sep, s) local out = {} for p in s:gmatch("[^" .. sep .. "]+") do out[#out + 1] = p end return table.unpack(out) end
@@ -80,19 +91,19 @@ end
 local function Say(s) io.stdout:write(s, "\n") end
 
 -- EasyFind.API as an extension sees it, every registration kept.
-local registered = { extensions = {}, providers = {} }
+local registered = { extensions = {}, providers = {}, refreshes = 0 }
 if mode ~= "noapi" then
     local API = { VERSION = 1, MINOR = mode == "oldapi" and 0 or 1 }
     function API.RegisterExtension(def) registered.extensions[def.id] = def return true end
     function API.RegisterSearchProvider(def) registered.providers[def.key] = def return true end
-    function API.RefreshSearchProvider() end
+    function API.RefreshSearchProvider() registered.refreshes = registered.refreshes + 1 end
     -- The GPS is installed in the questie mode: its entry joins Questie's menu.
     function API.HasAction(id, name) return mode == "questie" and id == "gps" and name == "navigate" end
     function API.CallAction() end
     function API.RegisterTrackerPiece(frame, show) registered.tracker = { frame = frame, show = show } end
     _G.EasyFind = { API = API }
 end
-local onReady
+local onReady, questUpdate
 -- Questie's tracker menu module, as its tracker calls it: a list ending in Cancel.
 local trackerMenu = { GetMenuForQuest = function() return { { text = "Focus Quest" }, { text = "Cancel" } } end }
 -- Two quests the game names alike, one leading to the other, and two alike with no link (one per faction).
@@ -118,7 +129,7 @@ local zoneDB = { GetUiMapIdByAreaId = function() return nil end }
 local trackerShows = 0
 local trackerModule = { Show = function() trackerShows = trackerShows + 1 end }
 if mode == "questie" or mode == "data" then
-    _G.Questie = { API = { RegisterOnReady = function(fn) onReady = fn end, RegisterForQuestUpdates = function() end } }
+    _G.Questie = { API = { RegisterOnReady = function(fn) onReady = fn end, RegisterForQuestUpdates = function(fn) questUpdate = fn end } }
     _G.QuestieLoader = { ImportModule = function(_, name)
         if name == "TrackerMenu" then return trackerMenu end
         if mode == "data" and name == "QuestieDB" then return questDB end
@@ -197,6 +208,9 @@ end
 -- A row's line names a level once: "Needs level 60", never "Needs level 60: Level 60".
 if mode == "data" then
     rawset(env.C_QuestLog, "IsQuestFlaggedCompleted", function() return false end)
+    local inLog = {}
+    rawset(env.C_QuestLog, "IsOnQuest", function(id) return inLog[id] == true end)
+    rawset(env.C_QuestLog, "IsComplete", function() return false end)
     local ok = onReady and pcall(onReady)
     Check(ok, "Questie ready with its quest data")
     local tracker = registered.tracker
@@ -211,6 +225,28 @@ if mode == "data" then
         "alike names one chain links are numbered: " .. tostring(byId[7508]) .. " / " .. tostring(byId[7509]))
     Check(byId[7507] == "Foror's Compendium", "a name of its own keeps it")
     Check(byId[100] == "Twin Errand" and byId[101] == "Twin Errand", "alike names with no link stay as the game has them")
+    -- A quest update re-reads states only: an unmoved row keeps its table,
+    -- and with no row moved EasyFind is not asked to refresh.
+    RunTimers()
+    local before = registered.refreshes
+    Check(questUpdate ~= nil, "listens to Questie's quest updates")
+    if questUpdate then
+        questUpdate()
+        RunTimers()
+        Check(registered.refreshes == before, "a quest update that moves no row asks for no refresh")
+        inLog[7508] = true
+        questUpdate()
+        RunTimers()
+        Check(registered.refreshes == before + 1, "a quest taken: one refresh, got " .. (registered.refreshes - before))
+        local again = provider.rows()
+        local lead = again[1] or {}
+        Check(lead.questId == 7508 and lead.inLog == true, "the log's quest leads")
+        Check(lead.searchCommandDesc == "In your log", "its line says so: " .. tostring(lead.searchCommandDesc))
+        local was, now = {}, {}
+        for _, r in ipairs(ok and rows or {}) do was[r.questId] = r end
+        for _, r in ipairs(again) do now[r.questId] = r end
+        Check(now[7507] ~= nil and now[7507] == was[7507], "an unmoved quest keeps its row")
+    end
 end
 if ns.Subtext then
     rawset(env.C_QuestLog, "IsQuestFlaggedCompleted", function() return false end)

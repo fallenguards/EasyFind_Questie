@@ -552,40 +552,47 @@ local function OnMap(id, mapID)
     return false
 end
 
--- Where the player stands with the quest, in a word or two: whether it
--- can be picked up, and if not, why when the reason is the level.
-local function StateWord(id, onQuest, level)
-    if onQuest then return L[IsDone(id) and "STATE_TURN_IN" or "STATE_IN_LOG"] end
-    if C_QuestLog.IsQuestFlaggedCompleted(id) then return L["STATE_DONE"] end
-    local need = Q.db.QueryQuestSingle(id, "requiredLevel")
-    if need and need > level then return sformat(L["STATE_NEEDS_LEVEL"], need) end
-    return L[Q.db.IsDoable(id) == true and "STATE_AVAILABLE" or "STATE_UNAVAILABLE"]
+-- Where the player stands with the quest, as its word's key: in the log,
+-- turned in, or whether it can be picked up (and if not, for the level).
+local function StateKey(id, onQuest, level, need)
+    if onQuest then return IsDone(id) and "STATE_TURN_IN" or "STATE_IN_LOG" end
+    if C_QuestLog.IsQuestFlaggedCompleted(id) then return "STATE_DONE" end
+    if need and need > level then return "STATE_NEEDS_LEVEL" end
+    return Q.db.IsDoable(id) == true and "STATE_AVAILABLE" or "STATE_UNAVAILABLE"
+end
+
+-- A quest's zone and giver, the subtext after its state and level.
+local function Where(id)
+    local zone = ZoneName(id)
+    local kind, eid = FirstGiver(id)
+    local giver = kind and EntityName(kind, eid)
+    if zone and giver then return zone .. ", " .. giver end
+    return zone or giver
+end
+
+local function Compose(key, need, level, where)
+    local state = key == "STATE_NEEDS_LEVEL" and sformat(L[key], need) or L[key]
+    -- "Needs level 60" says it already: no "Level 60" after it.
+    if level and level > 0 and not (key == "STATE_NEEDS_LEVEL" and need == level) then
+        local said = sformat(L["LEVEL_FMT"], level)
+        where = where and said .. ", " .. where or said
+    end
+    return where and sformat(L["STATE_SUBTEXT_FMT"], state, where) or state
+end
+
+local KEY_ICON = { STATE_TURN_IN = ICON_TURN_IN, STATE_IN_LOG = ICON_IN_PROGRESS, STATE_DONE = ICON_DONE }
+
+-- A row's subtext and the game's mark for its state, gray for a quest the
+-- player cannot pick up yet.
+local function Paint(row, key, need, level, where)
+    row.searchCommandDesc = Compose(key, need, level, where)
+    row.icon = KEY_ICON[key] or ICON_AVAILABLE
+    row.iconDimmed = (key == "STATE_NEEDS_LEVEL" or key == "STATE_UNAVAILABLE") or nil
 end
 
 local function Subtext(id, onQuest, playerLevel)
-    local parts = {}
-    local state = StateWord(id, onQuest, playerLevel)
-    local level = Q.db.QueryQuestSingle(id, "questLevel")
-    -- "Needs level 60" says it already: no "Level 60" after it.
-    if level and level > 0 and state ~= sformat(L["STATE_NEEDS_LEVEL"], level) then
-        parts[#parts + 1] = sformat(L["LEVEL_FMT"], level)
-    end
-    local zone = ZoneName(id)
-    if zone then parts[#parts + 1] = zone end
-    local kind, eid = FirstGiver(id)
-    local giver = kind and EntityName(kind, eid)
-    if giver then parts[#parts + 1] = giver end
-    return #parts > 0 and sformat(L["STATE_SUBTEXT_FMT"], state, table.concat(parts, ", ")) or state
-end
-
--- The game's mark for the quest's state, and whether it is drawn gray (a
--- quest the player cannot pick up yet).
-local function QuestIcon(id, onQuest, level)
-    if onQuest then
-        return IsDone(id) and ICON_TURN_IN or ICON_IN_PROGRESS, false
-    end
-    if C_QuestLog.IsQuestFlaggedCompleted(id) then return ICON_DONE, false end
-    return ICON_AVAILABLE, not Available(id, level)
+    local need = Q.db.QueryQuestSingle(id, "requiredLevel")
+    return Compose(StateKey(id, onQuest, playerLevel, need), need, Q.db.QueryQuestSingle(id, "questLevel"), Where(id))
 end
 
 -- ==== EasyFind links ========================================================
@@ -654,11 +661,10 @@ local function ResolveShareKey(tail)
     id = tonumber(id)
     local name = id and QuestName(id)
     if not name then return nil end
-    name = Labeled(id, name)
-    local onQuest, level = C_QuestLog.IsOnQuest(id), UnitLevel("player")
-    local icon, dim = QuestIcon(id, onQuest, level)
-    local row = { name = name, questId = id, searchCommandDesc = Subtext(id, onQuest, level),
-                  icon = icon, iconDimmed = dim or nil }
+    local needed = Q.db.QueryQuestSingle(id, "requiredLevel")
+    local key = StateKey(id, C_QuestLog.IsOnQuest(id), UnitLevel("player"), needed)
+    local row = { name = Labeled(id, name), questId = id }
+    Paint(row, key, needed, Q.db.QueryQuestSingle(id, "questLevel"), Where(id))
     if progress ~= "" then
         row.shared = {}
         for done, need in progress:gmatch("(%d+)/(%d+)") do
@@ -670,59 +676,118 @@ end
 
 -- Which quests the search lists, by their state.
 local SHOW_DEFAULT = "notDone"
-local function Shows(db, id, onQuest, level)
-    local show = db.show or SHOW_DEFAULT
+local function Shows(show, key)
     if show == "all" then return true end
-    if show == "inLog" then return onQuest end
-    local done = C_QuestLog.IsQuestFlaggedCompleted(id)
-    if show == "done" then return done end
-    if done then return false end
-    if show == "available" then return not onQuest and Available(id, level) end
+    if show == "inLog" then return key == "STATE_IN_LOG" or key == "STATE_TURN_IN" end
+    if show == "done" then return key == "STATE_DONE" end
+    if key == "STATE_DONE" then return false end
+    if show == "available" then return key == "STATE_AVAILABLE" end
     return true
 end
 
--- The log's quests lead, by name: what an empty @quest lists.
-local function LogFirst(a, b)
-    if (a.inLog or false) ~= (b.inLog or false) then return a.inLog == true end
-    return a.name < b.name
+-- Each quest's row, read from Questie once; a quest update re-reads only
+-- states (a full rebuild per update stuttered ~100 ms over 5,000 quests).
+local S = {
+    rows = {}, need = {}, level = {}, where = {}, key = {}, order = nil,
+    queue = nil, at = 1, named = nil,
+    passAt = 1, fresh = false, changed = false, force = false, scheduled = false,
+    here = nil, near = {},
+}
+local SLICE_MS, CHECK_EVERY = 4, 50
+
+local function ReadQuest(id)
+    local name = QuestName(id)
+    if not name then return end
+    local had = S.named[name]
+    if had == nil then S.named[name] = id
+    elseif type(had) == "number" then S.named[name] = { had, id }
+    else had[#had + 1] = id end
+    local n = #S.rows + 1
+    S.rows[n] = { name = name, questId = id, mapID = MapOfArea(Q.db.QueryQuestSingle(id, "zoneOrSort")) }
+    S.need[n] = Q.db.QueryQuestSingle(id, "requiredLevel") or false
+    S.level[n] = Q.db.QueryQuestSingle(id, "questLevel") or false
+    S.where[n] = Where(id) or false
+end
+
+-- Reads Questie's quests for up to budget ms; true once all are read,
+-- their parts numbered and their names in order.
+local function Warm(budget)
+    if S.order then return true end
+    if not S.queue then
+        S.queue, S.named, S.at = {}, {}, 1
+        for id in pairs(Q.db.QuestPointers) do S.queue[#S.queue + 1] = id end
+    end
+    local stop, queue = debugprofilestop() + budget, S.queue
+    while S.at <= #queue do
+        ReadQuest(queue[S.at])
+        S.at = S.at + 1
+        if S.at % CHECK_EVERY == 0 and debugprofilestop() > stop then return false end
+    end
+    partOf = {}
+    for _, ids in pairs(S.named) do
+        if type(ids) == "table" then NumberChains(ids) end
+    end
+    local rows, order = S.rows, {}
+    for i = 1, #rows do
+        rows[i].name = Labeled(rows[i].questId, rows[i].name)
+        order[i] = i
+    end
+    table.sort(order, function(a, b) return rows[a].name < rows[b].name end)
+    S.order, S.queue, S.named = order, nil, nil
+    return true
+end
+
+-- Re-reads each quest's state for up to budget ms, repainting a row only
+-- when its state moved; true once all are read.
+local function Pass(budget)
+    if S.fresh then return true end
+    local stop, level = debugprofilestop() + budget, UnitLevel("player")
+    local rows, keys, need = S.rows, S.key, S.need
+    local i = S.passAt
+    while i <= #rows do
+        local row = rows[i]
+        local onQuest = C_QuestLog.IsOnQuest(row.questId)
+        local key = StateKey(row.questId, onQuest, level, need[i])
+        if key ~= keys[i] then
+            keys[i] = key
+            Paint(row, key, need[i], S.level[i], S.where[i])
+            row.inLog = onQuest or nil
+            S.changed = true
+        end
+        i = i + 1
+        if i % CHECK_EVERY == 0 and debugprofilestop() > stop then
+            S.passAt = i
+            return false
+        end
+    end
+    S.passAt, S.fresh = 1, true
+    return true
 end
 
 local function Rows()
     if not ready then return {} end
+    Warm(mhuge)
+    Pass(mhuge)
+    S.changed, S.force = false, false
     local db = DB()
-    local level = UnitLevel("player")
+    local show = db.show or SHOW_DEFAULT
     local here = db.nearMe and C_Map.GetBestMapForUnit("player") or nil
-    local out = {}
-    -- The first pass also gathers each name's quests, for their parts.
-    local named = not partOf and {} or nil
-    for id in pairs(Q.db.QuestPointers) do
-        local name = QuestName(id)
-        if name and named then
-            local had = named[name]
-            if had == nil then named[name] = id
-            elseif type(had) == "number" then named[name] = { had, id }
-            else had[#had + 1] = id end
+    if here ~= S.here then S.here, S.near = here, {} end
+    -- The log's quests lead, by name: what an empty @quest lists.
+    local out, rest = {}, {}
+    for k = 1, #S.order do
+        local i = S.order[k]
+        local row = S.rows[i]
+        local keep = Shows(show, S.key[i])
+        if keep and here then
+            if S.near[i] == nil then S.near[i] = OnMap(row.questId, here) end
+            keep = S.near[i]
         end
-        if name then
-            local onQuest = C_QuestLog.IsOnQuest(id)
-            local keep = Shows(db, id, onQuest, level)
-            if keep and here then keep = OnMap(id, here) end
-            if keep then
-                local icon, dim = QuestIcon(id, onQuest, level)
-                out[#out + 1] = { name = name, questId = id, searchCommandDesc = Subtext(id, onQuest, level),
-                                  icon = icon, iconDimmed = dim or nil, inLog = onQuest or nil,
-                                  mapID = MapOfArea(Q.db.QueryQuestSingle(id, "zoneOrSort")) }
-            end
+        if keep then
+            if row.inLog then out[#out + 1] = row else rest[#rest + 1] = row end
         end
     end
-    if named then
-        partOf = {}
-        for _, ids in pairs(named) do
-            if type(ids) == "table" then NumberChains(ids) end
-        end
-    end
-    for i = 1, #out do out[i].name = Labeled(out[i].questId, out[i].name) end
-    table.sort(out, LogFirst)
+    for k = 1, #rest do out[#out + 1] = rest[k] end
     return out
 end
 
@@ -794,18 +859,39 @@ end
 
 -- ==== registration ==========================================================
 
-local pending = false
-local function Refresh()
-    if pending or not ready then return end
-    pending = true
-    C_Timer.After(0.5, function()
-        pending = false
-        API.RefreshSearchProvider(KEY)
-    end)
+-- A slice a frame; EasyFind refreshes only when a row moved or the list's
+-- rule did (most objective ticks move none).
+local function Run()
+    if not (Warm(SLICE_MS) and Pass(SLICE_MS)) then
+        C_Timer.After(0, Run)
+        return
+    end
+    S.scheduled = false
+    if S.changed or S.force then API.RefreshSearchProvider(KEY) end
+end
+
+local function Schedule()
+    if S.scheduled or not ready then return end
+    S.scheduled = true
+    C_Timer.After(0.5, Run)
+end
+
+-- Questie's quests or the player's level moved: every state is read again.
+local function Restate()
+    S.fresh, S.passAt = false, 1
+    Schedule()
+end
+
+-- What the list shows moved (Show, Near me, the zone), the states did not.
+local function Relist()
+    S.force = true
+    Schedule()
 end
 
 local events = CreateFrame("Frame")
-events:SetScript("OnEvent", Refresh)
+events:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LEVEL_UP" then Restate() else Relist() end
+end)
 
 local function WatchZone()
     if DB().nearMe then events:RegisterEvent("ZONE_CHANGED_NEW_AREA") else events:UnregisterEvent("ZONE_CHANGED_NEW_AREA") end
@@ -822,13 +908,13 @@ local SHOW_CHOICES = {
 local function GetShow() return DB().show or SHOW_DEFAULT end
 local function SetShow(value)
     DB().show = value ~= SHOW_DEFAULT and value or nil
-    Refresh()
+    Relist()
 end
 local function GetNearMe() return DB().nearMe == true end
 local function SetNearMe(on)
     DB().nearMe = on or nil
     WatchZone()
-    Refresh()
+    Relist()
 end
 
 local function FilterOptions()
@@ -900,11 +986,11 @@ local function OnReady()
         return
     end
     ready = true
-    Questie.API.RegisterForQuestUpdates(Refresh)
+    Questie.API.RegisterForQuestUpdates(Restate)
     events:RegisterEvent("PLAYER_LEVEL_UP")
     WatchZone()
     if ns.InstallTrackerMenu then ns.InstallTrackerMenu() end
-    API.RefreshSearchProvider(KEY)
+    Relist()
 end
 
 if Questie and Questie.API and Questie.API.RegisterOnReady then
