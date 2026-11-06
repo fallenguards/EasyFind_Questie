@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.1] - 2026-11-06
+
+- No more brief stutter when you accept a quest or make progress on one.
+
 ## [1.2.0] - 2026-11-04
 
 - Questie's tracker hides and shows with EasyFind's Toggle Objective Tracker; needs EasyFind 5.1.0 or later.
