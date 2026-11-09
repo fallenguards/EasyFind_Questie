@@ -154,15 +154,33 @@ local function EntityName(kind, eid)
     return type(name) == "string" and name or nil
 end
 
+-- Where a quest's giver or ender stands: the area, and its name.
+local function EntityArea(kind, eid)
+    if kind == "npc" then return Q.db.QueryNPCSingle(eid, "zoneID") end
+    if kind == "object" then return Q.db.QueryObjectSingle(eid, "zoneID") end
+    return nil
+end
+
+local function EntityZone(kind, eid)
+    return AreaName(EntityArea(kind, eid))
+end
+
+-- The map a giver stands on: its first spawn's zone (its own area is a
+-- subzone with no map of its own).
+local function EntityMap(kind, eid)
+    local spawns = kind == "npc" and Q.db.QueryNPCSingle(eid, "spawns")
+        or kind == "object" and Q.db.QueryObjectSingle(eid, "spawns")
+    if type(spawns) ~= "table" then return nil end
+    for areaId in pairs(spawns) do
+        local mapID = MapOfArea(areaId)
+        if mapID then return mapID end
+    end
+    return nil
+end
+
 -- A quest's zone: its own area, else where its giver stands.
 local function ZoneName(id)
-    local area = Q.db.QueryQuestSingle(id, "zoneOrSort")
-    local name = AreaName(area)
-    if name then return name end
-    local kind, eid = FirstGiver(id)
-    if kind == "npc" then return AreaName(Q.db.QueryNPCSingle(eid, "zoneID")) end
-    if kind == "object" then return AreaName(Q.db.QueryObjectSingle(eid, "zoneID")) end
-    return nil
+    return AreaName(Q.db.QueryQuestSingle(id, "zoneOrSort")) or EntityZone(FirstGiver(id))
 end
 
 -- ==== spots =================================================================
@@ -562,8 +580,8 @@ local function StateKey(id, onQuest, level, need)
 end
 
 -- A quest's zone and giver, the subtext after its state and level.
-local function Where(id)
-    local zone = ZoneName(id)
+local function Where(id, zone)
+    zone = zone or ZoneName(id)
     local kind, eid = FirstGiver(id)
     local giver = kind and EntityName(kind, eid)
     if zone and giver then return zone .. ", " .. giver end
@@ -703,10 +721,14 @@ local function ReadQuest(id)
     elseif type(had) == "number" then S.named[name] = { had, id }
     else had[#had + 1] = id end
     local n = #S.rows + 1
-    S.rows[n] = { name = name, questId = id, mapID = MapOfArea(Q.db.QueryQuestSingle(id, "zoneOrSort")) }
+    -- The zone's name is a search word too ("ruins of lord quests"); a
+    -- dungeon's quests, with no map of their own, stand on their giver's.
+    local zone = ZoneName(id)
+    S.rows[n] = { name = name, questId = id, keywords = zone and { zone } or nil,
+                  mapID = MapOfArea(Q.db.QueryQuestSingle(id, "zoneOrSort")) or EntityMap(FirstGiver(id)) }
     S.need[n] = Q.db.QueryQuestSingle(id, "requiredLevel") or false
     S.level[n] = Q.db.QueryQuestSingle(id, "questLevel") or false
-    S.where[n] = Where(id) or false
+    S.where[n] = Where(id, zone) or false
 end
 
 -- Reads Questie's quests for up to budget ms; true once all are read,
@@ -819,10 +841,18 @@ local function Tooltip(row, tt)
     if zone then tt:AddLine(zone, 1, 1, 1) end
     local kind, eid = FirstGiver(id)
     local giver = kind and EntityName(kind, eid)
-    if giver then tt:AddLine(sformat(kind == "item" and L["STARTS_FROM_ITEM"] or L["STARTS_AT"], giver), 1, 1, 1) end
+    if giver then
+        local at = EntityZone(kind, eid)
+        tt:AddLine(kind == "item" and sformat(L["STARTS_FROM_ITEM"], giver)
+            or at and sformat(L["STARTS_AT_IN_FMT"], giver, at) or sformat(L["STARTS_AT"], giver), 1, 1, 1)
+    end
     local npcs, objects = Finishers(id)
-    local ender = npcs and npcs[1] and EntityName("npc", npcs[1]) or objects and objects[1] and EntityName("object", objects[1])
-    if ender and ender ~= giver then tt:AddLine(sformat(L["ENDS_AT"], ender), 1, 1, 1) end
+    local enderKind, enderId = npcs and npcs[1] and "npc" or objects and objects[1] and "object", npcs and npcs[1] or objects and objects[1]
+    local ender = enderKind and EntityName(enderKind, enderId)
+    if ender and ender ~= giver then
+        local at = EntityZone(enderKind, enderId)
+        tt:AddLine(at and sformat(L["ENDS_AT_IN_FMT"], ender, at) or sformat(L["ENDS_AT"], ender), 1, 1, 1)
+    end
     local state, r, g, b = State(id)
     if state then tt:AddLine(state, r, g, b) end
     -- A link's row: the sender's progress, against Questie's objectives.
