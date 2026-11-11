@@ -209,8 +209,8 @@ if mode == "questie" then
     Check(ok and printed[#printed] ~= nil and printed[#printed]:find("not available", 1, true) ~= nil,
         "no quest data: says quest search is off")
     local menu = trackerMenu.GetMenuForQuest(trackerMenu, { Id = 7 })
-    Check(#menu == 3 and menu[2].text == "Directions" and menu[3].text == "Cancel",
-        "Directions in Questie's tracker menu, before Cancel")
+    Check(#menu == 3 and menu[2].text == "EasyFind Directions" and menu[3].text == "Cancel",
+        "EasyFind Directions in Questie's tracker menu, before Cancel")
     Check(menu[2].func ~= nil and pcall(menu[2].func), "its entry runs")
 end
 -- A row's line names a level once: "Needs level 60", never "Needs level 60: Level 60".
