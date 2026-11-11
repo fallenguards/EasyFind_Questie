@@ -4,7 +4,7 @@
 
 - A dungeon's quests answer to the dungeon's name: "deadmines" lists the quests inside it, and the map tab's dungeon preview shows them.
 - A quest's tooltip says where its giver and its ender stand: "Starts at Marshal Dughan in Elwynn Forest", "Ends at ...".
-- The entry in Questie's tracker menu reads EasyFind Directions.
+- With the GPS extension, the entry in Questie's tracker menu reads EasyFind Directions.
 
 ## [1.2.1] - 2026-11-06
 
