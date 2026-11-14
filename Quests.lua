@@ -786,10 +786,13 @@ local function Pass(budget)
     return true
 end
 
+-- EasyFind 5.4.0 on: the frame goes between pieces while it builds rows.
+local Checkpoint = API.SliceCheckpoint or function() end
+
 local function Rows()
     if not ready then return {} end
-    Warm(mhuge)
-    Pass(mhuge)
+    while not Warm(SLICE_MS) do Checkpoint() end
+    while not Pass(SLICE_MS) do Checkpoint() end
     S.changed, S.force = false, false
     local db = DB()
     local show = db.show or SHOW_DEFAULT
@@ -798,6 +801,7 @@ local function Rows()
     -- The log's quests lead, by name: what an empty @quest lists.
     local out, rest = {}, {}
     for k = 1, #S.order do
+        if k % 256 == 0 then Checkpoint() end
         local i = S.order[k]
         local row = S.rows[i]
         local keep = Shows(show, S.key[i])
