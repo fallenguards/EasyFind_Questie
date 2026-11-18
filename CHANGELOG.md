@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.1] - 2026-11-18
+
+- Fewer hitches at login: Questie's quests are read into the search in small pieces, letting the game draw in between (EasyFind 5.4.0 or later).
+
 ## [1.3.0] - 2026-11-11
 
 - A dungeon's quests answer to the dungeon's name: "deadmines" lists the quests inside it, and the map tab's dungeon preview shows them.
