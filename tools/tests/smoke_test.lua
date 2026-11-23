@@ -115,13 +115,15 @@ local quests = {
     [101] = { name = "Twin Errand" },
     -- A dungeon's quest (a sort, no zone of its own), given by a man in the ruins and ended by another in town.
     [200] = { name = "The Wrath of Rath'mael", zoneOrSort = -2999, startedBy = { { 5000 } }, finishedBy = { { 5001 } } },
+    -- Filed under a part of a zone that has a name of its own (a dungeon's doorstep): the zone's map, the part's name.
+    [300] = { name = "Blueleaf Tubers", zoneOrSort = 1717 },
 }
 -- The giver stands in a subzone (no map of its own) of a zone with one.
 local npcs = {
     [5000] = { name = "Deathguard Kristof", zoneID = 1497, spawns = { [85] = { { 61, 65 } } } },
     [5001] = { name = "Magistrate Sevren", zoneID = 159 },
 }
-local areaNames = { [1497] = "Ruins of Lordaeron", [159] = "Brill" }
+local areaNames = { [1497] = "Ruins of Lordaeron", [159] = "Brill", [1717] = "Razorfen Kraul" }
 local questDB = {
     QuestPointers = {},
     QueryQuestSingle = function(id, field) return quests[id] and quests[id][field] end,
@@ -132,7 +134,7 @@ local questDB = {
     IsDoable = function() return false end,
 }
 for id in pairs(quests) do questDB.QuestPointers[id] = true end
-local zoneDB = { GetUiMapIdByAreaId = function(_, areaId) return areaId == 85 and 1420 or nil end }
+local zoneDB = { GetUiMapIdByAreaId = function(_, areaId) return areaId == 85 and 1420 or areaId == 1717 and 1413 or nil end }
 -- Questie's tracker frame and module, its own show counted.
 local trackerShows = 0
 local trackerModule = { Show = function() trackerShows = trackerShows + 1 end }
@@ -226,6 +228,7 @@ if mode == "data" then
     Check(tracker ~= nil and tracker.show ~= nil and pcall(tracker.show) and trackerShows == 1,
         "and comes back through Questie's own show")
     rawset(env.C_Map, "GetAreaInfo", function(id) return areaNames[id] end)
+    rawset(env.C_Map, "GetMapInfo", function(m) return m == 1413 and { name = "The Barrens" } or nil end)
     local rows
     ok, rows = pcall(provider.rows)
     local byId, rowOf = {}, {}
@@ -234,6 +237,12 @@ if mode == "data" then
     Check(dungeonQuest.keywords ~= nil and dungeonQuest.keywords[1] == "Ruins of Lordaeron",
         "a dungeon's quest answers to the dungeon's name: " .. tostring(dungeonQuest.keywords and dungeonQuest.keywords[1]))
     Check(dungeonQuest.mapID == 1420, "and stands on its giver's map: " .. tostring(dungeonQuest.mapID))
+    -- "rfk quests" found none of Razorfen Kraul's (2026-11-22): Questie files them under the part of
+    -- The Barrens named for the dungeon, and the row answered to its map's name alone.
+    local partQuest = rowOf[300] or {}
+    local words = table.concat(partQuest.keywords or {}, " / ")
+    Check(words == "The Barrens / Razorfen Kraul", "a quest filed under a named part of a zone answers to both names: " .. words)
+    Check(partQuest.mapID == 1413, "and stands on the zone's map: " .. tostring(partQuest.mapID))
     Check(dungeonQuest.searchCommandDesc ~= nil and dungeonQuest.searchCommandDesc:find("Ruins of Lordaeron, Deathguard Kristof", 1, true) ~= nil,
         "its line names the zone and the giver: " .. tostring(dungeonQuest.searchCommandDesc))
     local said = {}

@@ -723,9 +723,20 @@ local function ReadQuest(id)
     local n = #S.rows + 1
     -- The zone's name is a search word too ("ruins of lord quests"); a
     -- dungeon's quests, with no map of their own, stand on their giver's.
+    -- So is the area's own name where Questie files a quest under a part
+    -- of a zone or a dungeon that has one (Razorfen Kraul in The Barrens,
+    -- the City of Dalaran): its map's name alone left "rfk quests" and
+    -- "dalaran quests" with none of them.
     local zone = ZoneName(id)
-    S.rows[n] = { name = name, questId = id, keywords = zone and { zone } or nil,
-                  mapID = MapOfArea(Q.db.QueryQuestSingle(id, "zoneOrSort")) or EntityMap(FirstGiver(id)) }
+    local area = Q.db.QueryQuestSingle(id, "zoneOrSort")
+    local own = type(area) == "number" and area > 0 and C_Map.GetAreaInfo(area) or nil
+    local keywords = zone and { zone } or nil
+    if own and own ~= zone then
+        keywords = keywords or {}
+        keywords[#keywords + 1] = own
+    end
+    S.rows[n] = { name = name, questId = id, keywords = keywords,
+                  mapID = MapOfArea(area) or EntityMap(FirstGiver(id)) }
     S.need[n] = Q.db.QueryQuestSingle(id, "requiredLevel") or false
     S.level[n] = Q.db.QueryQuestSingle(id, "questLevel") or false
     S.where[n] = Where(id, zone) or false
