@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.2] - 2026-11-23
+
+- A quest answers to the name of the place it is filed under: "rfk quests" lists Razorfen Kraul's quests, which Questie files under the part of The Barrens named for the dungeon.
+
 ## [1.3.1] - 2026-11-18
 
 - Fewer hitches at login: Questie's quests are read into the search in small pieces, letting the game draw in between (EasyFind 5.4.0 or later).
